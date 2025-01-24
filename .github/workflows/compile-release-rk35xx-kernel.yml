@@ -53,7 +53,7 @@ on:
         type: choice
         options:
           - -rk35xx-ophub
-          - -yourname
+          - -me2
       kernel_config:
         description: "Set the path of kernel .config"
         required: false
