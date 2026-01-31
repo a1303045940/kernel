@@ -163,7 +163,7 @@ jobs:
           api_url="https://api.github.com/repos/${{ inputs.kernel_source }}/git/ref/heads/${kernel_branch}"
           source_hash=$(curl -fsSL -m 20 \
               -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Authorization: Bearer ${{ secrets.GH_TOKEN }}" \
               ${api_url} |
               jq -r '.object.sha'
           )
@@ -205,7 +205,7 @@ jobs:
           removeArtifacts: false
           replacesArtifacts: true
           makeLatest: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
           body: |
             - These kernels can be used for `Armbian`, `OpenWrt` and `FnNAS`.
             - These are dedicated BSP kernels for `Rockchip rk3528/rk3566/rk3568` and are not compatible with other series.
