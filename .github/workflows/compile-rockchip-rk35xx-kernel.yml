@@ -180,6 +180,88 @@ jobs:
           restore-keys: |
             kernel-rk35xx-${{ inputs.kernel_toolchain }}-${{ inputs.kernel_version }}-
 
+      # =================================================================================================
+      # [新增步骤] 植入自定义驱动配置和 DTS 文件
+      # =================================================================================================
+      - name: Inject Custom Config and DTS
+        run: |
+          echo "🚀 开始植入自定义配置..."
+          
+          # 1. 确定工作目录
+          # ophub 的脚本通常把源码下载到 /builder/kernel 或者当前工作区
+          # 我们先定位到 defconfig 所在的目录
+          WORK_DIR="/builder"
+          if [ -d "$WORK_DIR/kernel" ]; then
+             KERNEL_ROOT="$WORK_DIR/kernel"
+          else
+             KERNEL_ROOT="${{ github.workspace }}"
+          fi
+          echo "内核源码根目录: $KERNEL_ROOT"
+
+          # 2. 注入驱动配置 (修改 defconfig)
+          # 注意：脚本通常使用 arch/arm64/configs/rockchip_linux_defconfig
+          DEFCONFIG_PATH=$(find $KERNEL_ROOT -name "rockchip_linux_defconfig" | head -n 1)
+          
+          if [ -f "$DEFCONFIG_PATH" ]; then
+              echo "正在修改配置文件: $DEFCONFIG_PATH"
+              
+              # 追加 Realtek DSA 驱动配置
+              cat <<EOF >> "$DEFCONFIG_PATH"
+          
+          # --- Added by User for RTL8367S Switch ---
+          CONFIG_NET_DSA=y
+          CONFIG_NET_DSA_TAG_RTL4_A=y
+          CONFIG_NET_DSA_REALTEK=y
+          CONFIG_NET_DSA_REALTEK_SMI=y
+          CONFIG_NET_DSA_REALTEK_RTL8365MB=y
+          # -----------------------------------------
+          EOF
+              
+              # 确保没有冲突的 "not set" 选项
+              sed -i '/CONFIG_NET_DSA is not set/d' "$DEFCONFIG_PATH"
+              sed -i '/CONFIG_NET_DSA_REALTEK is not set/d' "$DEFCONFIG_PATH"
+              
+              echo "✅ 驱动配置注入成功！"
+          else
+              echo "⚠️ 警告: 未找到 rockchip_linux_defconfig，尝试修改 inputs 指定的 config..."
+              # 如果找不到默认文件，尝试修改 inputs.kernel_config 指向的文件
+              TARGET_CONFIG="${{ github.workspace }}/${{ inputs.kernel_config }}"
+              if [ -f "$TARGET_CONFIG" ]; then
+                  echo "CONFIG_NET_DSA=y" >> "$TARGET_CONFIG"
+                  echo "CONFIG_NET_DSA_TAG_RTL4_A=y" >> "$TARGET_CONFIG"
+                  echo "CONFIG_NET_DSA_REALTEK=y" >> "$TARGET_CONFIG"
+                  echo "CONFIG_NET_DSA_REALTEK_SMI=y" >> "$TARGET_CONFIG"
+                  echo "CONFIG_NET_DSA_REALTEK_RTL8365MB=y" >> "$TARGET_CONFIG"
+                  echo "✅ 已注入到 $TARGET_CONFIG"
+              fi
+          fi
+
+          # 3. 植入自定义 DTS 文件
+          # 假设你已经把改好的 'rk3568-bd-one.dts' 上传到了你仓库的 'my_files' 文件夹下
+          MY_DTS_PATH="${{ github.workspace }}/my_files/rk3568-bd-one.dts"
+          DTS_DIR="$KERNEL_ROOT/arch/arm64/boot/dts/rockchip"
+          
+          if [ -f "$MY_DTS_PATH" ] && [ -d "$DTS_DIR" ]; then
+              echo "正在复制 DTS 文件..."
+              cp -f "$MY_DTS_PATH" "$DTS_DIR/"
+              
+              # 检查复制结果
+              if [ -f "$DTS_DIR/rk3568-bd-one.dts" ]; then
+                  echo "✅ DTS 文件植入成功: $DTS_DIR/rk3568-bd-one.dts"
+              else
+                  echo "❌ DTS 文件复制失败！"
+                  exit 1
+              fi
+          else
+              echo "⚠️ 跳过 DTS 植入: 源文件或目标目录不存在。"
+              echo "源文件: $MY_DTS_PATH"
+              echo "目标目录: $DTS_DIR"
+              # 注意：如果没有 DTS，你可能需要手动在 Makefile 里添加编译项，否则新加的 DTS 不会被编译
+              # 这里假设你的文件名是源码里本身就有的，只是为了覆盖它。
+              # 如果是全新的文件名，还需要修改 rockchip/Makefile。
+          fi
+      # =================================================================================================
+
       - name: Compile the kernel [ ${{ inputs.kernel_version }} ]
         uses: ophub/amlogic-s9xxx-armbian@main
         if: ${{ steps.disk.outputs.status == 'success' && !cancelled() }}
