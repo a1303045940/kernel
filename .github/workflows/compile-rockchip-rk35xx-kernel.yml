@@ -71,9 +71,10 @@ on:
       kernel_sign:
         description: "Set the kernel custom signature"
         required: false
-        default: "-rk35xx-ophub"
+        default: "-rk35xx-a1303045940"
         type: choice
         options:
+          - -rk35xx-a1303045940
           - -rk35xx-ophub
           - -happy-new-year
           - -dragon-boat-festival
